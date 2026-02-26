@@ -1,0 +1,86 @@
+# =====================================================================
+# QuantNucleo — .gitignore
+# =====================================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual envs
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Data (não versionar dados brutos)
+data/raw/**/*.csv
+data/raw/**/*.parquet
+data/processed/
+data/features/
+*.h5
+*.hdf5
+
+# Modelos treinados (usar MLflow/DVC)
+models/*.h5
+models/*.pkl
+models/*.pt
+
+# Relatórios gerados
+*.pdf
+imagens/*.png
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.backup
+infra/terraform/.terraform.lock.hcl
+
+# Docker
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# mypy
+.mypy_cache/
+
+# pytest
+.pytest_cache/
+
+# LaTeX
+*.aux
+*.log
+*.fdb_latexmk
+*.fls
+*.toc
+*.out
+*.synctex.gz

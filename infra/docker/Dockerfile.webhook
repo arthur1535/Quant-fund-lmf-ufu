@@ -1,0 +1,38 @@
+# =====================================================================
+# QuantNucleo — Dockerfile Webhook Receiver
+# =====================================================================
+
+FROM python:3.11-slim as builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml .
+RUN pip install --no-cache-dir --prefix=/install .
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+LABEL maintainer="Núcleo Quant LMF/UFU"
+LABEL description="QuantNucleo Webhook Receiver"
+
+COPY --from=builder /install /usr/local
+
+COPY config/ config/
+COPY libs/ libs/
+COPY services/webhook_receiver/ services/webhook_receiver/
+COPY strategies/ strategies/
+
+ENV PYTHONUNBUFFERED=1
+ENV AMBIENTE=prod
+
+HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
+    CMD python -c "import httpx; r=httpx.get('http://localhost:8001/health'); assert r.status_code==200"
+
+EXPOSE 8001
+
+CMD ["uvicorn", "services.webhook_receiver.main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "2"]

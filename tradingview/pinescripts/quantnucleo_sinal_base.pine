@@ -1,0 +1,79 @@
+// =====================================================================
+// QuantNucleo — Indicador Base com Alertas Webhook
+// =====================================================================
+// Este script serve como TEMPLATE para indicadores do núcleo quant.
+// Gera alertas que são enviados via webhook ao endpoint do QuantNucleo.
+//
+// IMPORTANTE: TradingView é a CAMADA DE APRESENTAÇÃO e ALERTAS.
+// A fonte de verdade dos sinais é o núcleo quant (Python).
+//
+// Configuração do Alerta no TradingView:
+//   1. Webhook URL: https://seu-endpoint/api/v1/webhooks/tradingview
+//   2. Headers: X-Webhook-Token: seu-token-secreto
+//   3. Payload: usar o formato JSON abaixo
+// =====================================================================
+
+//@version=5
+indicator("QuantNucleo — Sinal Base", overlay=true, shorttitle="QN")
+
+// =============================================
+// INPUTS
+// =============================================
+mm_curta_len = input.int(20, "MM Curta", minval=5, maxval=100)
+mm_longa_len = input.int(50, "MM Longa", minval=20, maxval=200)
+rsi_len      = input.int(14, "RSI Período", minval=5, maxval=50)
+rsi_ob       = input.float(70.0, "RSI Sobrecompra", minval=50, maxval=95)
+rsi_os       = input.float(30.0, "RSI Sobrevenda", minval=5, maxval=50)
+
+// =============================================
+// CÁLCULOS
+// =============================================
+mm_curta = ta.sma(close, mm_curta_len)
+mm_longa = ta.sma(close, mm_longa_len)
+rsi_val  = ta.rsi(close, rsi_len)
+
+// Cruzamentos
+golden_cross = ta.crossover(mm_curta, mm_longa)
+death_cross  = ta.crossunder(mm_curta, mm_longa)
+
+// RSI extremos
+rsi_sobrecompra = ta.crossover(rsi_val, rsi_ob)
+rsi_sobrevenda  = ta.crossunder(rsi_val, rsi_os)
+
+// =============================================
+// PLOTS
+// =============================================
+plot(mm_curta, "MM Curta", color=color.blue, linewidth=2)
+plot(mm_longa, "MM Longa", color=color.red, linewidth=2)
+
+// Sinais visuais
+plotshape(golden_cross, "Golden Cross", shape.triangleup, location.belowbar, color.green, size=size.small)
+plotshape(death_cross, "Death Cross", shape.triangledown, location.abovebar, color.red, size=size.small)
+
+// Background RSI
+bgcolor(rsi_val > rsi_ob ? color.new(color.red, 90) : rsi_val < rsi_os ? color.new(color.green, 90) : na)
+
+// =============================================
+// ALERTAS (Webhook payload)
+// =============================================
+// Formato JSON para o webhook do QuantNucleo:
+//
+// {
+//   "ticker": "{{ticker}}",
+//   "action": "buy",
+//   "price": {{close}},
+//   "interval": "{{interval}}",
+//   "exchange": "{{exchange}}",
+//   "strategy_name": "quantnucleo_sinal_base",
+//   "indicator_value": <rsi>,
+//   "message": "Golden Cross MM20/MM50",
+//   "idempotency_key": "{{ticker}}_{{timenow}}_buy"
+// }
+
+alertcondition(golden_cross, "QN: Golden Cross (Compra)", '{"ticker":"{{ticker}}","action":"buy","price":{{close}},"interval":"{{interval}}","exchange":"{{exchange}}","strategy_name":"quantnucleo_sinal_base","message":"Golden Cross MM' + str.tostring(mm_curta_len) + '/MM' + str.tostring(mm_longa_len) + '","idempotency_key":"{{ticker}}_{{timenow}}_buy"}')
+
+alertcondition(death_cross, "QN: Death Cross (Venda)", '{"ticker":"{{ticker}}","action":"sell","price":{{close}},"interval":"{{interval}}","exchange":"{{exchange}}","strategy_name":"quantnucleo_sinal_base","message":"Death Cross MM' + str.tostring(mm_curta_len) + '/MM' + str.tostring(mm_longa_len) + '","idempotency_key":"{{ticker}}_{{timenow}}_sell"}')
+
+alertcondition(rsi_sobrevenda, "QN: RSI Sobrevenda", '{"ticker":"{{ticker}}","action":"buy","price":{{close}},"interval":"{{interval}}","exchange":"{{exchange}}","strategy_name":"quantnucleo_rsi","indicator_value":' + str.tostring(rsi_val) + ',"message":"RSI Sobrevenda","idempotency_key":"{{ticker}}_{{timenow}}_rsi_buy"}')
+
+alertcondition(rsi_sobrecompra, "QN: RSI Sobrecompra", '{"ticker":"{{ticker}}","action":"sell","price":{{close}},"interval":"{{interval}}","exchange":"{{exchange}}","strategy_name":"quantnucleo_rsi","indicator_value":' + str.tostring(rsi_val) + ',"message":"RSI Sobrecompra","idempotency_key":"{{ticker}}_{{timenow}}_rsi_sell"}')

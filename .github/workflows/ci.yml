@@ -1,0 +1,232 @@
+# =====================================================================
+# QuantNucleo — GitHub Actions CI/CD Pipeline
+# =====================================================================
+# Pipeline completo para núcleo quant institucional:
+#   1. Lint + Testes unitários
+#   2. Backtest automatizado (smoke + regressão)
+#   3. Validação estatística mínima
+#   4. Build Docker container
+#   5. Deploy AKS (se aprovado)
+#   6. Healthcheck pós-deploy + rollback se falhar
+# =====================================================================
+
+name: CI/CD QuantNucleo
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ===================================================================
+  # JOB 1: Lint + Testes Unitários
+  # ===================================================================
+  lint-and-test:
+    name: "🔍 Lint + Testes"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Lint (Ruff)
+        run: |
+          ruff check libs/ services/ strategies/ tests/ --output-format=github
+
+      - name: Type check (MyPy)
+        run: |
+          mypy libs/ services/ strategies/ --ignore-missing-imports
+        continue-on-error: true
+
+      - name: Unit Tests
+        run: |
+          pytest tests/unit/ -v --tb=short -x \
+            --junitxml=reports/unit-tests.xml \
+            --cov=libs --cov=services --cov-report=xml:reports/coverage.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: reports/
+
+  # ===================================================================
+  # JOB 2: Backtest Smoke Tests
+  # ===================================================================
+  backtest-smoke:
+    name: "🧪 Backtest Smoke"
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,research]"
+
+      - name: Smoke Backtest
+        run: |
+          pytest tests/backtest/ -m smoke -v --tb=short \
+            --junitxml=reports/backtest-smoke.xml
+        timeout-minutes: 15
+
+      - name: Upload backtest results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backtest-results
+          path: reports/
+
+  # ===================================================================
+  # JOB 3: Validação Estatística
+  # ===================================================================
+  statistical-validation:
+    name: "📊 Validação Estatística"
+    runs-on: ubuntu-latest
+    needs: backtest-smoke
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,research]"
+
+      - name: Run statistical validation
+        run: |
+          pytest tests/backtest/ -m "not smoke" -v --tb=long \
+            --junitxml=reports/stat-validation.xml
+        timeout-minutes: 30
+
+  # ===================================================================
+  # JOB 4: Build Docker
+  # ===================================================================
+  docker-build:
+    name: "🐳 Build Docker"
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/Dockerfile.api
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api:latest
+
+      - name: Build and push Webhook
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/Dockerfile.webhook
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/webhook:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/webhook:latest
+
+  # ===================================================================
+  # JOB 5: Deploy AKS (apenas main, manual approval)
+  # ===================================================================
+  deploy-aks:
+    name: "🚀 Deploy AKS"
+    runs-on: ubuntu-latest
+    needs: [docker-build, statistical-validation]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set AKS context
+        uses: azure/aks-set-context@v3
+        with:
+          resource-group: rg-quantnucleo
+          cluster-name: aks-quantnucleo
+
+      - name: Deploy to AKS
+        run: |
+          kubectl apply -f infra/k8s/namespace.yml
+          kubectl apply -f infra/k8s/
+          kubectl set image deployment/api api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api:${{ github.sha }} -n quantnucleo
+          kubectl set image deployment/webhook webhook=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/webhook:${{ github.sha }} -n quantnucleo
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/api -n quantnucleo --timeout=300s
+          kubectl rollout status deployment/webhook -n quantnucleo --timeout=300s
+
+      - name: Healthcheck
+        run: |
+          API_URL=$(kubectl get svc api -n quantnucleo -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          
+          for i in {1..10}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${API_URL}:8000/health)
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Healthcheck OK"
+              exit 0
+            fi
+            echo "⏳ Tentativa $i — status $STATUS"
+            sleep 10
+          done
+          
+          echo "❌ Healthcheck falhou — iniciando rollback"
+          kubectl rollout undo deployment/api -n quantnucleo
+          kubectl rollout undo deployment/webhook -n quantnucleo
+          exit 1

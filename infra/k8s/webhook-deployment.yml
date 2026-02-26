@@ -1,0 +1,73 @@
+# =====================================================================
+# QuantNucleo — Kubernetes: Webhook Deployment + Service
+# =====================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook
+  namespace: quantnucleo
+  labels:
+    app: quantnucleo
+    component: webhook
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: quantnucleo
+      component: webhook
+  template:
+    metadata:
+      labels:
+        app: quantnucleo
+        component: webhook
+      annotations:
+        ad.datadoghq.com/webhook.logs: '[{"source":"python","service":"quantnucleo-webhook"}]'
+    spec:
+      containers:
+        - name: webhook
+          image: ghcr.io/arthur1535/quant-fund-lmf.ufu/webhook:latest
+          ports:
+            - containerPort: 8001
+          env:
+            - name: AMBIENTE
+              value: "prod"
+            - name: TV_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: quantnucleo-secrets
+                  key: tv-webhook-secret
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook
+  namespace: quantnucleo
+spec:
+  type: LoadBalancer
+  selector:
+    app: quantnucleo
+    component: webhook
+  ports:
+    - port: 8001
+      targetPort: 8001

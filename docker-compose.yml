@@ -1,0 +1,77 @@
+# =====================================================================
+# QuantNucleo — Docker Compose (Ambiente Local Dev)
+# =====================================================================
+# Levanta todos os serviços para desenvolvimento local.
+# Em produção: usar AKS + Terraform.
+
+version: "3.9"
+
+services:
+  # --- API Principal ---
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - AMBIENTE=dev
+      - DEBUG=true
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - mongo
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # --- Webhook Receiver ---
+  webhook:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.webhook
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      - AMBIENTE=dev
+      - DEBUG=true
+    depends_on:
+      - mongo
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # --- MongoDB (local) ---
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: dev_password
+      MONGO_INITDB_DATABASE: quantnucleo
+    volumes:
+      - mongo_data:/data/db
+
+  # --- MongoDB Express (admin UI) ---
+  mongo-express:
+    image: mongo-express:latest
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: dev_password
+      ME_CONFIG_MONGODB_URL: mongodb://admin:dev_password@mongo:27017/?authSource=admin
+    depends_on:
+      - mongo
+
+volumes:
+  mongo_data:

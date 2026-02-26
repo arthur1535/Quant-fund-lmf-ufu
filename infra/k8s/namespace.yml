@@ -1,0 +1,11 @@
+# =====================================================================
+# QuantNucleo — Kubernetes: Namespace
+# =====================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: quantnucleo
+  labels:
+    app: quantnucleo
+    environment: production
