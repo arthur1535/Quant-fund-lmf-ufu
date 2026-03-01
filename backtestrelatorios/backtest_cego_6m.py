@@ -500,7 +500,7 @@ def gerar_relatorio_latex(
 
     data_ini = DATA_INICIO_OOS.strftime("%d/%m/%Y")
     data_fim_str = DATA_FIM.strftime("%d/%m/%Y")
-    dias_oos = resultados[0]["dias_uteis"]
+    dias_oos = len(precos_oos)
 
     # ====== Tabela comparativa RV ======
     tabela_rv_linhas = []
@@ -571,6 +571,11 @@ def gerar_relatorio_latex(
     # ====== CDI como benchmark ======
     cdi_acumulado = (1 + CDI_DIARIO) ** dias_oos - 1
     cdi_valor_final = CAPITAL_INICIAL * (1 + cdi_acumulado)
+
+    # Direção predominante das taxas na carteira RF (para texto da conclusão)
+    deltas_taxa = [t.get("delta_taxa_bps", 0.0) for t in resultado_rf.get("detalhes_titulos", [])]
+    media_delta_bps = float(np.mean(deltas_taxa)) if deltas_taxa else 0.0
+    tendencia_juros = "queda" if media_delta_bps < 0 else "alta" if media_delta_bps > 0 else "estabilidade"
 
     # ====== Tickers da carteira ======
     tickers_formatados = ", ".join([t.replace(".SA", "") for t in TICKERS_RV])
@@ -845,7 +850,7 @@ permite as seguintes conclusões:
     ) + r""" o CDI acumulado de """ + _pct(cdi_acumulado) + r""";
 
     \item \textbf{Renda Fixa}: o componente RF contribuiu com retorno de """ + _pct(resultado_rf['retorno_total']) + r""",
-          beneficiado pela """ + ("queda" if resultado_rf["retorno_total"] > cdi_acumulado else "estabilidade") + r""" nas taxas de juros
+          beneficiado pela """ + tendencia_juros + r""" nas taxas de juros
           e consequente ganho de marcação a mercado;
 
     \item \textbf{Risk-Weighted}: a estratégia de pesos por volatilidade inversa tende a apresentar
