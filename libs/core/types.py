@@ -57,6 +57,48 @@ class NivelRisco(str, Enum):
     CRITICO = "CRITICO"
 
 
+class ClasseAtivo(str, Enum):
+    """Classe do ativo para classificação de carteira."""
+    ACAO = "ACAO"
+    RENDA_FIXA = "RENDA_FIXA"
+    FII = "FII"
+    ETF = "ETF"
+    FUTURO = "FUTURO"
+    OPCAO = "OPCAO"
+    CRYPTO = "CRYPTO"
+
+
+class TipoRendaFixa(str, Enum):
+    """Tipo de título de renda fixa."""
+    PREFIXADO = "PREFIXADO"
+    IPCA_MAIS = "IPCA+"
+    SELIC = "SELIC"
+    CDI = "CDI"
+    CDI_MAIS = "CDI+"
+    DEBENTURE = "DEBENTURE"
+
+
+class RatingCredito(str, Enum):
+    """Rating de crédito para títulos."""
+    AAA = "AAA"
+    AA = "AA"
+    A = "A"
+    BBB = "BBB"
+    BB = "BB"
+    B = "B"
+    CCC = "CCC"
+    CC = "CC"
+    C = "C"
+    D = "D"
+
+
+class RecomendacaoValuation(str, Enum):
+    """Recomendação qualitativa de valuation."""
+    SUBVALORIZADO = "SUBVALORIZADO"
+    JUSTO = "JUSTO"
+    SOBREVALORIZADO = "SOBREVALORIZADO"
+
+
 # =============================================================================
 # Modelos de Dados
 # =============================================================================
@@ -66,12 +108,70 @@ class Ativo(BaseModel):
     ticker: str
     nome: Optional[str] = None
     mercado: Mercado = Mercado.BR
+    classe: ClasseAtivo = ClasseAtivo.ACAO
     setor: Optional[str] = None
     sufixo_yf: str = ""  # Ex: ".SA" para B3
 
     @property
     def ticker_yfinance(self) -> str:
         return f"{self.ticker}{self.sufixo_yf}"
+
+
+class TituloRendaFixaModel(BaseModel):
+    """Título de renda fixa (Pydantic model para API/serialização)."""
+    nome: str
+    tipo: TipoRendaFixa
+    valor_nominal: float = 1000.0
+    taxa_cupom: float = 0.0
+    taxa_mercado: float = 0.10
+    vencimento: datetime
+    emissao: Optional[datetime] = None
+    rating: Optional[RatingCredito] = None
+    indexador: Optional[str] = None
+    spread: float = 0.0
+    quantidade: float = 1.0
+
+
+class ResultadoMtMModel(BaseModel):
+    """Resultado de marcação a mercado (para serialização)."""
+    titulo: str
+    pu_curva: float
+    pu_mercado: float
+    diferenca_absoluta: float
+    diferenca_percentual: float
+    duration_modificada: float
+    dv01: float
+
+
+class ResultadoValuationModel(BaseModel):
+    """Resultado de valuation de ação (para serialização via API)."""
+    ticker: str
+    data_referencia: datetime
+    preco_atual: float
+
+    # Fair values por método
+    dcf_fair_value: Optional[float] = None
+    ddm_fair_value: Optional[float] = None
+    graham_number: Optional[float] = None
+    multiplos_fair_value: Optional[float] = None
+    fair_value_composto: Optional[float] = None
+    upside_downside: Optional[float] = None
+
+    # Scores
+    piotroski_f_score: Optional[int] = None
+    altman_z_score: Optional[float] = None
+
+    # Múltiplos
+    pe_ratio: Optional[float] = None
+    pb_ratio: Optional[float] = None
+    ev_ebitda: Optional[float] = None
+    earnings_yield: Optional[float] = None
+    fcf_yield: Optional[float] = None
+    dividend_yield: Optional[float] = None
+
+    # Recomendação
+    recomendacao: RecomendacaoValuation = RecomendacaoValuation.JUSTO
+    confianca: float = 0.0
 
 
 class Sinal(BaseModel):

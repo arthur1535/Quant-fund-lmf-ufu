@@ -18,6 +18,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   PYTHON_VERSION: "3.11"
   REGISTRY: ghcr.io
@@ -45,7 +49,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e ".[dev]"
+          pip install -e ".[ci]"
 
       - name: Lint (Ruff)
         run: |
@@ -68,6 +72,7 @@ jobs:
         with:
           name: test-results
           path: reports/
+          retention-days: 7
 
   # ===================================================================
   # JOB 2: Backtest Smoke Tests
@@ -102,6 +107,7 @@ jobs:
         with:
           name: backtest-results
           path: reports/
+          retention-days: 7
 
   # ===================================================================
   # JOB 3: Validação Estatística
@@ -148,6 +154,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Lowercase image name
+        run: |
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -183,7 +193,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [docker-build, statistical-validation]
     if: github.ref == 'refs/heads/main'
-    environment: production
+    # environment: 
+    #   name: production
     
     steps:
       - name: Checkout

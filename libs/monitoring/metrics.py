@@ -189,7 +189,7 @@ class MetricsCollector:
             logger.info("📊 Métricas em modo log (dev)")
 
     def gauge(self, nome: str, valor: float, tags: list[str] | None = None):
-        tags = tags or []
+        tags = list(tags) if tags else []
         tags.append(f"env:{self.ambiente}")
         if self._client:
             self._client.gauge(nome, valor, tags=tags)
@@ -197,7 +197,7 @@ class MetricsCollector:
             logger.debug("metric.gauge", metric=nome, value=valor, tags=tags)
 
     def increment(self, nome: str, valor: int = 1, tags: list[str] | None = None):
-        tags = tags or []
+        tags = list(tags) if tags else []
         tags.append(f"env:{self.ambiente}")
         if self._client:
             self._client.increment(nome, valor, tags=tags)
@@ -205,7 +205,7 @@ class MetricsCollector:
             logger.debug("metric.counter", metric=nome, value=valor, tags=tags)
 
     def histogram(self, nome: str, valor: float, tags: list[str] | None = None):
-        tags = tags or []
+        tags = list(tags) if tags else []
         tags.append(f"env:{self.ambiente}")
         if self._client:
             self._client.histogram(nome, valor, tags=tags)

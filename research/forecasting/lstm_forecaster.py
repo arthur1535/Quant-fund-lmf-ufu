@@ -1,4 +1,4 @@
-# =====================================================================
+# s=====================================================================
 # QuantNucleo — Research: LSTM Integration
 # =====================================================================
 # Wrapper para integrar modelos LSTM existentes no pipeline do QuantNucleo.
@@ -204,8 +204,11 @@ class LSTMForecaster:
         """
         if self.modelo is None:
             raise RuntimeError("Modelo não treinado. Chame treinar() primeiro.")
+        if self.scaler is None:
+            raise RuntimeError("Scaler não inicializado. Chame treinar() primeiro.")
 
-        _, _, dados = self._preparar_dados(precos)
+        # Usar scaler já treinado (NÃO re-fit)
+        dados = self.scaler.transform(precos.values.reshape(-1, 1))
 
         # Usar últimos `lookback` pontos como seed
         seed = dados[-self.config.lookback :].reshape(1, self.config.lookback, 1)

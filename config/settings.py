@@ -172,6 +172,10 @@ class QuantNucleoConfig(BaseSettings):
         return self.ambiente == Ambiente.PROD
 
 
+import functools
+
+
+@functools.lru_cache(maxsize=1)
 def get_config() -> QuantNucleoConfig:
-    """Factory — retorna configuração singleton."""
+    """Factory — retorna configuração singleton (cached)."""
     return QuantNucleoConfig()

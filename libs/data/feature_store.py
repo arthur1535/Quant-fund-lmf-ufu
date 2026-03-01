@@ -107,10 +107,92 @@ class FeatureStore:
         """Matriz de correlação rolling entre ativos."""
         result = {}
         for col in self.retornos_log.columns:
-            result[col] = self.retornos_log.rolling(janela).corr(
+            corr_df = self.retornos_log.rolling(janela).corr(
                 self.retornos_log[col]
             )
+            # Garantir que o resultado é um DataFrame simples (sem MultiIndex)
+            if isinstance(corr_df.index, pd.MultiIndex):
+                corr_df = corr_df.droplevel(1)
+            result[col] = corr_df
         return result
+
+    # =========================================================================
+    # Features de Renda Fixa
+    # =========================================================================
+
+    def spread_cdi_rolling(
+        self,
+        retornos_ativo: pd.Series,
+        cdi_diario: pd.Series,
+        janela: int = 21,
+    ) -> pd.Series:
+        """Spread do retorno do ativo sobre o CDI (rolling)."""
+        excesso = retornos_ativo - cdi_diario
+        return excesso.rolling(janela).mean() * 252
+
+    def taxa_real_implica(
+        self,
+        taxa_nominal: pd.Series,
+        ipca_esperado: float = 0.045,
+    ) -> pd.Series:
+        """Taxa real implícita: (1+nominal)/(1+inflação) - 1."""
+        return (1 + taxa_nominal) / (1 + ipca_esperado) - 1
+
+    def carry_trade_signal(
+        self,
+        taxa_curta: pd.Series,
+        taxa_longa: pd.Series,
+    ) -> pd.Series:
+        """
+        Sinal de carry trade: diferença entre taxa longa e curta.
+        Positivo = curva inclinada (favorece posição tomada na ponta longa).
+        """
+        return taxa_longa - taxa_curta
+
+    def retorno_acumulado_cdi(
+        self,
+        cdi_diario: pd.Series,
+    ) -> pd.Series:
+        """Retorno acumulado do CDI (benchmark de renda fixa)."""
+        return (1 + cdi_diario).cumprod() - 1
+
+    # =========================================================================
+    # Features de Valuation
+    # =========================================================================
+
+    def roc(self, janela: int = 21) -> pd.DataFrame:
+        """Rate of Change (momentum)."""
+        return self.precos / self.precos.shift(janela) - 1
+
+    def bollinger_bands(
+        self,
+        janela: int = 20,
+        num_std: float = 2.0,
+    ) -> dict[str, pd.DataFrame]:
+        """Bandas de Bollinger (média, superior, inferior, %B)."""
+        media = self.precos.rolling(janela).mean()
+        std = self.precos.rolling(janela).std()
+        superior = media + num_std * std
+        inferior = media - num_std * std
+        pct_b = (self.precos - inferior) / (superior - inferior)
+        return {
+            "media": media,
+            "superior": superior,
+            "inferior": inferior,
+            "pct_b": pct_b,
+        }
+
+    def z_score_preco(self, janela: int = 63) -> pd.DataFrame:
+        """Z-score do preço (desvios da média rolling)."""
+        media = self.precos.rolling(janela).mean()
+        std = self.precos.rolling(janela).std()
+        return (self.precos - media) / std
+
+    def obv(self, volumes: pd.DataFrame) -> pd.DataFrame:
+        """On-Balance Volume (OBV)."""
+        sinais = np.sign(self.precos.diff())
+        obv_values = (sinais * volumes).cumsum()
+        return obv_values
 
     def compute_all(self, janela_vol: int = 21) -> pd.DataFrame:
         """Computa todas as features e retorna DataFrame unificado."""
@@ -125,6 +207,12 @@ class FeatureStore:
             features[f"{prefix}_rsi"] = self.rsi().get(col)
             features[f"{prefix}_drawdown"] = self.drawdown().get(col)
             features[f"{prefix}_sharpe_63d"] = self.sharpe_rolling(63).get(col)
+            features[f"{prefix}_roc_21d"] = self.roc(21).get(col)
+            features[f"{prefix}_z_score_63d"] = self.z_score_preco(63).get(col)
+
+            # Bandas de Bollinger
+            bb = self.bollinger_bands()
+            features[f"{prefix}_bb_pct_b"] = bb["pct_b"].get(col)
 
         logger.info("features_computadas", total_colunas=len(features.columns))
         return features.dropna()

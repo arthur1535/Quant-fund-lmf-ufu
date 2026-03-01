@@ -1,0 +1,299 @@
+\documentclass[a4paper, 12pt]{article}
+
+% ========== PACOTES ==========
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazilian]{babel}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{siunitx}
+\usepackage{multirow}
+\usepackage{longtable}
+
+\geometry{margin=2cm}
+\sisetup{
+    group-separator = {.},
+    output-decimal-marker = {,},
+    round-mode = places,
+}
+
+% ========== CORES ==========
+\definecolor{verde}{RGB}{0, 128, 0}
+\definecolor{vermelho}{RGB}{200, 0, 0}
+\definecolor{azulescuro}{RGB}{0, 51, 102}
+
+% ========== CABEÇALHO ==========
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textcolor{azulescuro}{\textbf{QuantNucleo} — Backtest Cego 6M}}
+\fancyhead[R]{\textcolor{azulescuro}{LMF / UFU}}
+\fancyfoot[C]{Página \thepage\ de \pageref{LastPage}}
+\renewcommand{\headrulewidth}{1pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=azulescuro,
+    urlcolor=azulescuro,
+}
+
+\begin{document}
+
+% ========== CAPA ==========
+\begin{titlepage}
+\centering
+\vspace*{3cm}
+{\Huge\bfseries\textcolor{azulescuro}{Relatório de Backtest Cego}\\[0.5cm]}
+{\LARGE Teste Out-of-Sample — Últimos 6 Meses\\[1cm]}
+{\Large Alocação Fictícia de R\$ 10.000.000,00\\[2cm]}
+{\large
+\textbf{Núcleo Quantitativo — LMF / UFU}\\
+Universidade Federal de Uberlândia\\[1cm]
+Período: 29/08/2025 a 28/02/2026\\
+Gerado em: 28/02/2026 21:24
+}
+\vfill
+{\footnotesize Documento gerado automaticamente pelo QuantNucleo Backtesting Engine v0.1.0}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ========================================================================
+\section{Introdução e Metodologia}
+% ========================================================================
+
+Este relatório apresenta os resultados do \textbf{backtest cego (out-of-sample)} realizado
+com uma alocação fictícia de \textbf{R\$ 10.000.000,00} no período de \textbf{29/08/2025} a \textbf{28/02/2026} (123 dias úteis).
+
+\subsection{Objetivos}
+\begin{itemize}
+    \item Avaliar o desempenho de múltiplas estratégias quantitativas em um \textbf{teste cego}
+          (dados não vistos durante o desenvolvimento);
+    \item Comparar rentabilidade absoluta e ajustada ao risco;
+    \item Mensurar o resultado de uma carteira diversificada (Renda Variável + Renda Fixa);
+    \item Trazer os valores finais ao \textbf{valor presente} utilizando a taxa Selic/CDI como desconto.
+\end{itemize}
+
+\subsection{Alocação da Carteira}
+A alocação entre classes de ativos segue a distribuição:
+\begin{itemize}
+    \item \textbf{70\%} em Renda Variável (ações B3):
+          PETR4, VALE3, ITUB4, BBDC4, ABEV3, WEGE3, BBAS3, SUZB3, B3SA3, MGLU3;
+    \item \textbf{30\%} em Renda Fixa (Tesouro Direto):
+          LTN 2026, NTN-B 2030, NTN-F 2029.
+\end{itemize}
+
+\subsection{Estratégias de Renda Variável Avaliadas}
+\begin{enumerate}
+    \item \textbf{Buy \& Hold Equal-Weight}: compra e manutenção com pesos iguais (benchmark passivo);
+    \item \textbf{Momentum Crossover MM20/MM50}: sinal de compra quando a média móvel de 20 dias
+          cruza acima da de 50 dias; zera posição no cruzamento inverso;
+    \item \textbf{Risk-Weighted (Vol Inversa)}: pesos proporcionais ao inverso da volatilidade
+          realizada (63 dias), rebalanceados diariamente.
+\end{enumerate}
+
+\subsection{Benchmark}
+O benchmark de referência é o \textbf{CDI acumulado} no período, equivalente a uma
+taxa de 13.75\% a.a. O CDI acumulado no período foi de:
+
+$$\text{CDI}_{acum} = (1 + 0.00051137)^{123} - 1 = 6.4902\%$$
+
+$$\text{Valor CDI} = R\$ 10,649,019.31$$
+
+% ========================================================================
+\newpage
+\section{Resultados — Renda Variável}
+% ========================================================================
+
+\subsection{Comparativo de Performance}
+
+\begin{table}[H]
+\centering
+\caption{Comparativo de performance das estratégias de Renda Variável}
+\label{tab:comparativo_rv}
+\resizebox{\textwidth}{!}{%
+    \begin{tabular}{lccccccc}
+    \toprule
+    \textbf{Estratégia} & \textbf{Valor Final} & \textbf{Retorno} & \textbf{Ret. Anual.} &
+    \textbf{Vol. Anual.} & \textbf{Sharpe} & \textbf{Sortino} & \textbf{Max DD} \\
+    \midrule
+        Buy \& Hold Equal-Weight & R\$ 9,540,382.02 & 36.29\% & 88.58\% & 16.53\% & 4.5283 & 7.8611 & -5.83\% \\
+        Momentum MM20/MM50 & R\$ 8,778,766.22 & 25.41\% & 58.43\% & 16.76\% & 2.6662 & 4.2585 & -6.62\% \\
+        Risk-Weighted (Vol Inversa) & R\$ 9,675,492.73 & 38.22\% & 93.06\% & 14.77\% & 5.3693 & 9.0041 & -4.58\% \\
+    \bottomrule
+    \end{tabular}%
+}
+\end{table}
+
+\subsection{VaR, CVaR e Estatísticas de Trading}
+
+\begin{table}[H]
+\centering
+\caption{Value at Risk, CVaR e estatísticas operacionais}
+\label{tab:var_cvar}
+    \begin{tabular}{lcccc}
+    \toprule
+    \textbf{Estratégia} & \textbf{VaR 95\% Diário} & \textbf{CVaR 95\%} & \textbf{Win Rate} & \textbf{Trades} \\
+    \midrule
+        Buy \& Hold Equal-Weight & -0.9493\% & -1.6726\% & 60.2\% & N/A \\
+        Momentum MM20/MM50 & -1.2699\% & -1.9285\% & 54.0\% & 29 \\
+        Risk-Weighted (Vol Inversa) & -0.8838\% & -1.5399\% & 59.7\% & N/A \\
+    \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{Interpretação}
+\begin{itemize}
+    \item O \textbf{Sharpe Ratio} é calculado como $\frac{R_{anual} - CDI_{anual}}{\sigma_{anual}}$,
+          portanto valores positivos indicam retorno excedente ao CDI;
+    \item O \textbf{Sortino Ratio} penaliza apenas a volatilidade negativa (downside deviation);
+    \item O \textbf{Max Drawdown} é a maior queda pico-a-vale no período;
+    \item O \textbf{VaR 95\%} indica a perda máxima esperada em 95\% dos dias.
+\end{itemize}
+
+% ========================================================================
+\newpage
+\section{Resultados — Renda Fixa}
+% ========================================================================
+
+\subsection{Composição da Carteira RF}
+Capital alocado em renda fixa: \textbf{R\$ 3,000,000.00}.
+
+\begin{table}[H]
+\centering
+\caption{Detalhamento dos títulos de renda fixa e marcação a mercado}
+\label{tab:rf_detalhe}
+\resizebox{\textwidth}{!}{%
+    \begin{tabular}{lccccccc}
+    \toprule
+    \textbf{Título} & \textbf{Peso} & \textbf{Capital} & \textbf{PU Ini} & \textbf{PU Fim} &
+    \textbf{Retorno} & \textbf{Ganho R\$} & \textbf{$\Delta$ Taxa (bps)} \\
+    \midrule
+        LTN 2026 (Prefixado) & 40\% & R\$ 1,200,000.00 & 893.26 & 946.64 & 5.98\% & R\$ 71,717.49 & -55 \\
+        NTN-B 2030 (IPCA+) & 30\% & R\$ 900,000.00 & 743.74 & 773.92 & 4.06\% & R\$ 36,514.68 & -25 \\
+        NTN-F 2029 (Prefixado c/ cupom) & 30\% & R\$ 900,000.00 & 706.09 & 755.98 & 7.07\% & R\$ 63,591.17 & -50 \\
+    \midrule
+    \textbf{Total RF} & 100\% &
+    \textbf{R\$ 3,000,000.00} & — & — &
+    \textbf{5.73\%} &
+    \textbf{R\$ 171,823.34} & — \\
+    \bottomrule
+    \end{tabular}%
+}
+\end{table}
+
+\subsection{Interpretação MtM}
+A marcação a mercado mostra que a \textbf{queda nas taxas de juros} no período gerou
+ganho de capital nos títulos prefixados e indexados ao IPCA. O Delta Taxa (em basis points)
+indica a variação entre a taxa de compra e a taxa de mercado na data de referência.
+
+A Duration Modificada amplifica o impacto: para cada $-100$ bps de queda na taxa,
+o PU sobe aproximadamente $D_{mod} \times 1\%$.
+
+% ========================================================================
+\newpage
+\section{Carteira Consolidada e Valor Presente}
+% ========================================================================
+
+\subsection{Consolidação RV + RF}
+
+\begin{table}[H]
+\centering
+\caption{Resultado consolidado da carteira}
+\label{tab:consolidado}
+    \begin{tabular}{lc}
+    \toprule
+    \textbf{Métrica} & \textbf{Valor} \\
+    \midrule
+    Capital Inicial Total & R\$ 10,000,000.00 \\
+    Capital RV (70\%) & R\$ 7,000,000.00 \\
+    Capital RF (30\%) & R\$ 3,000,000.00 \\
+    \midrule
+    Valor Final RV & R\$ 9,675,491.00 \\
+    Valor Final RF & R\$ 3,171,823.34 \\
+    \midrule
+    \textbf{Valor Final Total} & \textbf{R\$ 12,847,314.34} \\
+    \textbf{Retorno Total} & \textbf{28.47\%} \\
+    \textbf{Retorno Anualizado} & \textbf{66.39\%} \\
+    \midrule
+    CDI Acumulado (benchmark) & 6.49\% \\
+    Valor se 100\% CDI & R\$ 10,649,019.31 \\
+    Alpha (vs CDI) & 21.98\% \\
+    \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{Valor Presente (Desconto a CDI)}
+
+Todos os valores finais são trazidos ao valor presente pela taxa CDI de
+13.75\% a.a., descontando 123 dias úteis:
+
+$$VP = \frac{VF}{(1 + CDI_{a.a.})^{du / 252}}$$
+
+\begin{table}[H]
+\centering
+\caption{Valores finais trazidos ao presente (desconto a CDI)}
+\label{tab:valor_presente}
+    \begin{tabular}{lccc}
+    \toprule
+    \textbf{Estratégia} & \textbf{Valor Final (VF)} & \textbf{Valor Presente (VP)} & \textbf{VP/Capital - 1} \\
+    \midrule
+        Buy \& Hold Equal-Weight (RV) & R\$ 9,540,382.02 & R\$ 8,958,930.15 & -10.41\% \\
+        Momentum MM20/MM50 (RV) & R\$ 8,778,766.22 & R\$ 8,243,732.09 & -17.56\% \\
+        Risk-Weighted (Vol Inversa) (RV) & R\$ 9,675,492.73 & R\$ 9,085,806.35 & -9.14\% \\
+        Renda Fixa & R\$ 3,171,823.34 & R\$ 2,978,512.15 & -0.72\% \\
+        \midrule
+        \textbf{Consolidada} & \textbf{R\$ 12,847,314.34} & \textbf{R\$ 12,064,316.88} & \textbf{20.64\%} \\
+    \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{Interpretação do Valor Presente}
+Ao trazer os valores ao presente, eliminamos o efeito do ``custo de oportunidade'' do CDI.
+Um VP maior que o capital inicial indica que a estratégia gerou \textbf{alpha real} acima do
+benchmark risk-free. Valores presentes negativos (VP $<$ Capital) indicam destruição de valor
+em termos reais.
+
+% ========================================================================
+\newpage
+\section{Conclusão}
+% ========================================================================
+
+O backtest cego dos últimos 6 meses, com alocação fictícia de R\$ 10 milhões,
+permite as seguintes conclusões:
+
+\begin{enumerate}
+    \item \textbf{Diversificação RV + RF}: a carteira consolidada (70\% RV + 30\% RF)
+          obteve retorno de 28.47\%, superando o CDI acumulado de 6.49\%;
+
+    \item \textbf{Renda Fixa}: o componente RF contribuiu com retorno de 5.73\%,
+          beneficiado pela estabilidade nas taxas de juros
+          e consequente ganho de marcação a mercado;
+
+    \item \textbf{Risk-Weighted}: a estratégia de pesos por volatilidade inversa tende a apresentar
+          menor drawdown, sendo adequada para investidores conservadores;
+
+    \item \textbf{Momentum}: a estratégia de cruzamento de médias apresenta desempenho variável
+          dependendo do regime de mercado (tendencial vs lateral);
+
+    \item \textbf{Valor Presente}: ao descontar pelo CDI, o VP consolidado resultou em
+          R\$ 12,064,316.88, indicando geração de alpha real.
+\end{enumerate}
+
+\vspace{1cm}
+\noindent\rule{\textwidth}{0.4pt}
+\begin{center}
+\textit{Este relatório é meramente informativo e acadêmico. Não constitui recomendação de investimento.\\
+Resultados passados não garantem retornos futuros.}
+\end{center}
+
+\end{document}

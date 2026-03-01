@@ -72,7 +72,10 @@ class RiskEngine:
         """Conditional VaR (Expected Shortfall)."""
         conf = confianca or self.config.cvar_confidence
         var = self.var_historico(retornos, conf)
-        return float(retornos[retornos <= var].mean())
+        tail = retornos[retornos <= var]
+        if tail.empty:
+            return float(var)  # fallback: retorna o próprio VaR
+        return float(tail.mean())
 
     # =========================================================================
     # Monte Carlo
@@ -220,13 +223,14 @@ class RiskEngine:
         retornos: pd.Series,
         rf_anual: float = 0.0,
     ) -> float:
-        """Sortino ratio anualizado."""
+        """Sortino ratio anualizado (downside deviation sobre todos os períodos)."""
         rf_diario = (1 + rf_anual) ** (1 / 252) - 1
         excess = retornos - rf_diario
-        downside = excess[excess < 0]
-        if len(downside) == 0 or downside.std() == 0:
+        downside_diff = np.minimum(excess, 0)
+        downside_dev = np.sqrt(np.mean(downside_diff ** 2))
+        if downside_dev == 0:
             return float("inf")
-        return float(excess.mean() / downside.std() * np.sqrt(252))
+        return float(excess.mean() / downside_dev * np.sqrt(252))
 
     def calmar_ratio(self, retornos: pd.Series) -> float:
         """Calmar ratio (retorno anualizado / max drawdown)."""
@@ -250,20 +254,20 @@ class RiskEngine:
         rejeicoes: list[str] = []
 
         # 1. Peso máximo por ativo
-        if sinal.peso_sugerido and sinal.peso_sugerido > self.config.max_single_position:
+        if sinal.peso_sugerido is not None and sinal.peso_sugerido > self.config.max_single_position:
             rejeicoes.append(
                 f"Peso sugerido ({sinal.peso_sugerido:.1%}) > limite "
                 f"({self.config.max_single_position:.1%})"
             )
 
         # 2. VaR estimado
-        if sinal.var_estimado and sinal.var_estimado < -0.10:
+        if sinal.var_estimado is not None and sinal.var_estimado < -0.10:
             rejeicoes.append(
                 f"VaR estimado ({sinal.var_estimado:.1%}) > threshold (-10%)"
             )
 
         # 3. Drawdown
-        if sinal.drawdown_maximo and sinal.drawdown_maximo < self.config.max_drawdown_threshold:
+        if sinal.drawdown_maximo is not None and sinal.drawdown_maximo < self.config.max_drawdown_threshold:
             rejeicoes.append(
                 f"Drawdown ({sinal.drawdown_maximo:.1%}) > threshold "
                 f"({self.config.max_drawdown_threshold:.1%})"
@@ -324,3 +328,108 @@ class RiskEngine:
                 for i, col in enumerate(retornos.columns)
             },
         }
+
+    # =========================================================================
+    # Métodos Avançados de Risco
+    # =========================================================================
+
+    def var_cornish_fisher(
+        self,
+        retornos: pd.Series,
+        confianca: float = 0.95,
+    ) -> float:
+        """
+        VaR ajustado por Cornish-Fisher (expansão para caudas pesadas).
+
+        Ajusta o quantil normal usando skewness e kurtosis da distribuição
+        real dos retornos, capturando melhor o risco de cauda.
+        """
+        from scipy.stats import norm
+
+        z = norm.ppf(1 - confianca)
+        s = float(retornos.skew())
+        k = float(retornos.kurtosis())
+
+        z_cf = (
+            z
+            + (z**2 - 1) * s / 6
+            + (z**3 - 3 * z) * k / 24
+            - (2 * z**3 - 5 * z) * s**2 / 36
+        )
+
+        var = float(retornos.mean() + z_cf * retornos.std())
+
+        logger.info("var_cornish_fisher", var=round(var, 6), skew=round(s, 4), kurtosis=round(k, 4))
+        return var
+
+    def stress_test(
+        self,
+        retornos: pd.DataFrame,
+        pesos: np.ndarray,
+        cenarios: dict[str, np.ndarray],
+    ) -> dict[str, float]:
+        """
+        Stress test do portfolio sob cenários definidos.
+
+        Args:
+            retornos: DataFrame de retornos dos ativos
+            pesos: Pesos do portfolio
+            cenarios: Dict de {nome_cenario: array de retornos por ativo}
+
+        Returns:
+            Dict de {nome_cenario: retorno_portfolio sob estresse}
+        """
+        resultados = {}
+        for nome, retornos_cenario in cenarios.items():
+            retorno = float(np.dot(pesos, retornos_cenario))
+            resultados[nome] = retorno
+            logger.info("stress_test", cenario=nome, retorno=round(retorno, 6))
+
+        return resultados
+
+    def tracking_error(
+        self,
+        retornos_portfolio: pd.Series,
+        retornos_benchmark: pd.Series,
+    ) -> float:
+        """
+        Tracking Error anualizado (volatilidade do excesso de retorno).
+
+        TE = std(Rp - Rb) × √252
+        """
+        excesso = retornos_portfolio - retornos_benchmark
+        te = float(excesso.std() * np.sqrt(252))
+        logger.info("tracking_error", te=round(te, 6))
+        return te
+
+    def information_ratio(
+        self,
+        retornos_portfolio: pd.Series,
+        retornos_benchmark: pd.Series,
+    ) -> float:
+        """
+        Information Ratio — retorno ativo por unidade de tracking error.
+
+        IR = (Rp_anual - Rb_anual) / TE
+        """
+        excesso = retornos_portfolio - retornos_benchmark
+        te = excesso.std() * np.sqrt(252)
+        if te == 0:
+            return 0.0
+        ir = float(excesso.mean() * 252 / te)
+        logger.info("information_ratio", ir=round(ir, 4))
+        return ir
+
+    def tail_ratio(self, retornos: pd.Series) -> float:
+        """
+        Tail Ratio — razão entre os percentis extremos.
+
+        Tail Ratio = |percentil 95| / |percentil 5|
+
+        Mede assimetria das caudas. > 1 indica cauda positiva maior.
+        """
+        p95 = np.percentile(retornos.dropna(), 95)
+        p5 = np.percentile(retornos.dropna(), 5)
+        if abs(p5) == 0:
+            return 0.0
+        return float(abs(p95) / abs(p5))

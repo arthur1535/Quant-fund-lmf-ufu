@@ -60,10 +60,18 @@ def _setup_structlog() -> None:
     root.setLevel(getattr(logging, cfg.log_level.upper(), logging.INFO))
 
 
-# Inicializa na importação
-_setup_structlog()
+_structlog_initialized = False
+
+
+def _ensure_initialized() -> None:
+    """Inicializa structlog de forma lazy (apenas na primeira chamada)."""
+    global _structlog_initialized
+    if not _structlog_initialized:
+        _setup_structlog()
+        _structlog_initialized = True
 
 
 def get_logger(name: str = "quantnucleo") -> structlog.stdlib.BoundLogger:
     """Retorna logger estruturado vinculado ao nome do módulo."""
+    _ensure_initialized()
     return structlog.get_logger(name)
